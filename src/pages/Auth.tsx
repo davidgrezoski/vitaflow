@@ -1,22 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Droplets, Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Github } from 'lucide-react';
 import { useApp } from '../context/Store';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { toast } from 'sonner';
 
 const Auth = () => {
   const { session } = useApp();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Form Fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [country] = useState<'BR' | 'US'>('BR');
+  
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
-  // Redirecionar automaticamente se já estiver logado
   useEffect(() => {
     if (session) {
       navigate('/', { replace: true });
@@ -27,136 +33,187 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setMessage(null);
 
     try {
+      const cleanEmail = email.trim();
+
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: cleanEmail,
           password,
         });
         if (error) throw error;
       } else {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: cleanEmail,
           password,
           options: {
             data: {
               name,
+              country,
+              preferred_language: language
             },
           },
         });
         if (error) throw error;
-        
         if (data.user && !data.session) {
-          setMessage("Cadastro realizado! Verifique seu email para confirmar a conta antes de entrar.");
           setIsLogin(true);
+          toast.success("Cadastro realizado! Verifique seu email.");
         }
       }
     } catch (err: any) {
-      console.error("Auth error:", err);
+      console.warn("Auth attempt failed:", err.message);
       let msg = err.message;
       
-      // Tradução de erros comuns do Supabase
       if (msg.includes('Invalid login credentials')) msg = 'Email ou senha incorretos.';
       if (msg.includes('Email not confirmed')) msg = 'Email não confirmado. Verifique sua caixa de entrada.';
-      if (msg.includes('User already registered')) msg = 'Este email já está cadastrado.';
+      if (msg.includes('User already registered')) msg = 'Email já cadastrado.';
       
       setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGithubLogin = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/`
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      console.error("GitHub Auth Error:", error);
+      toast.error("Erro ao conectar com GitHub.");
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white dark:bg-black flex flex-col items-center justify-center p-6 transition-colors duration-500">
-      <div className="w-full max-w-sm space-y-10 animate-fade-in">
+    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
+      {/* Background Image com Overlay */}
+      <div className="absolute inset-0 z-0">
+        <img 
+            src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1000&auto=format&fit=crop" 
+            alt="Fitness Background" 
+            className="w-full h-full object-cover opacity-60"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/70 to-black"></div>
+      </div>
+
+      <div className="relative z-10 flex-1 flex flex-col px-8 pb-12 pt-20 justify-end">
         
-        {/* Logo Section */}
-        <div className="flex flex-col items-center text-center space-y-6">
-          <div className="w-24 h-24 bg-emerald-500 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-emerald-500/30 rotate-3 hover:rotate-0 transition-transform duration-500">
-            <Droplets className="text-white w-12 h-12" fill="currentColor" />
-          </div>
-          <div>
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">VitaFlow</h1>
-            <p className="text-gray-500 dark:text-zinc-500 mt-2 font-medium text-lg">Sua saúde, simplificada.</p>
-          </div>
+        {/* Header Text */}
+        <div className="mb-8 animate-slide-up">
+          <h1 className="text-5xl font-bold text-white mb-2 leading-tight">
+            Bem-vindo ao <br />
+            <span className="text-primary">VitaFlow</span>
+          </h1>
+          <p className="text-gray-300 text-sm max-w-[250px]">
+            Sua jornada de saúde e fitness começa aqui. Transforme seu corpo e mente.
+          </p>
         </div>
 
-        {message && (
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-4 rounded-2xl text-sm font-bold text-center border border-emerald-100 dark:border-emerald-900/30">
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleAuth} className="space-y-4">
-          {!isLogin && (
-            <div className="space-y-1">
-              <input
-                type="text"
-                required
-                placeholder="Seu Nome"
-                className="input-field"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-          )}
+        {/* Form Container */}
+        <div className="w-full space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
           
-          <div className="space-y-1">
-            <input
-              type="email"
-              required
-              placeholder="Email"
-              className="input-field"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <input
-              type="password"
-              required
-              minLength={6}
-              placeholder="Senha"
-              className="input-field"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-2xl text-sm font-bold text-center border border-red-100 dark:border-red-900/30">
+            <div className="bg-red-500/20 text-red-200 p-3 rounded-xl text-xs font-bold border border-red-500/30">
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-lg"
-          >
-            {loading ? <Loader2 className="animate-spin w-6 h-6" /> : (
-              <>
-                {isLogin ? 'Entrar' : 'Começar Agora'}
-                <ArrowRight size={20} />
-              </>
+          <form onSubmit={handleAuth} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  required
+                  placeholder="Seu Nome"
+                  className="w-full bg-white/10 backdrop-blur-md border border-white/10 text-white placeholder-gray-400 p-5 rounded-2xl outline-none focus:border-primary transition-colors"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
             )}
-          </button>
-        </form>
+            
+            <input
+              type="email"
+              required
+              placeholder="Email"
+              className="w-full bg-white/10 backdrop-blur-md border border-white/10 text-white placeholder-gray-400 p-5 rounded-2xl outline-none focus:border-primary transition-colors"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
-        <div className="text-center">
+            <div className="relative">
+                <input
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                placeholder="Senha"
+                className="w-full bg-white/10 backdrop-blur-md border border-white/10 text-white placeholder-gray-400 p-5 rounded-2xl outline-none focus:border-primary transition-colors"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                />
+                <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-5 rounded-full shadow-lg shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+            >
+              {loading ? <Loader2 className="animate-spin w-6 h-6" /> : (
+                <>
+                  {isLogin ? "Entrar com Email" : "Criar Conta"}
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Divisor */}
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10"></div>
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-black px-2 text-gray-500 font-bold">Ou continue com</span>
+            </div>
+          </div>
+
+          {/* Botão GitHub */}
           <button
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(null);
-              setMessage(null);
-            }}
-            className="text-gray-400 dark:text-zinc-600 text-sm font-bold hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
+            type="button"
+            onClick={handleGithubLogin}
+            disabled={loading}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-full border border-zinc-700 flex items-center justify-center gap-3 transition-all active:scale-95"
           >
-            {isLogin ? 'Não tem conta? Criar agora' : 'Já tenho uma conta'}
+            <Github size={20} />
+            Entrar com GitHub
           </button>
+
+          <div className="text-center mt-4">
+            <button
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+              }}
+              className="text-gray-400 text-sm font-medium hover:text-white transition-colors"
+            >
+              {isLogin ? "Não tem uma conta? Cadastre-se" : "Já tem uma conta? Entrar"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -10,30 +10,32 @@ export default {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       colors: {
-        // Cores personalizadas para o tema "True Black" vs "Clean White"
+        // PALETA LARANJA (Substituindo Roxo/Verde)
         primary: {
-          DEFAULT: '#10b981', // emerald-500
-          hover: '#059669',   // emerald-600
-          light: '#d1fae5',   // emerald-100
-          dark: 'rgba(16, 185, 129, 0.2)', // emerald transparente para dark mode
+          DEFAULT: '#f97316', // orange-500
+          hover: '#ea580c',   // orange-600
+          light: '#ffedd5',   // orange-100
+          dark: 'rgba(249, 115, 22, 0.2)', // orange transparente
         },
+        // PALETA DARK MODE (Baseada nas imagens)
         dark: {
           bg: '#000000',      // Preto absoluto
-          surface: '#121212', // Cinza muito escuro para cartões
+          surface: '#121212', // Cinza quase preto para cartões
+          card: '#1c1c1e',    // Cinza um pouco mais claro para elementos internos
           border: '#27272a',  // zinc-800
-          text: '#e4e4e7',    // zinc-200
+          text: '#ffffff',    // Branco puro
           muted: '#a1a1aa',   // zinc-400
         },
         light: {
           bg: '#ffffff',
-          surface: '#f8f9fa', // gray-50
-          border: '#e5e7eb',  // gray-200
+          surface: '#f4f4f5', // zinc-100
+          border: '#e4e4e7',  // zinc-200
           text: '#18181b',    // zinc-900
           muted: '#71717a',   // zinc-500
         }
       },
       boxShadow: {
-        'glow': '0 0 20px -5px rgba(16, 185, 129, 0.3)',
+        'glow': '0 0 20px -5px rgba(249, 115, 22, 0.4)', // Glow laranja
         'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
       },
       animation: {
@@ -49,6 +51,9 @@ export default {
           '0%': { transform: 'translateY(20px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         }
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       }
     }
   },

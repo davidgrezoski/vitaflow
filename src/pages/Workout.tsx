@@ -1,195 +1,263 @@
 import React, { useState } from 'react';
-import { Dumbbell, Settings, Trash2, Sparkles, Check, ChevronRight } from 'lucide-react';
+import { Sparkles, Calendar, Loader2, ChevronRight, Check } from 'lucide-react';
 import { generateId } from '../lib/utils';
-import { Workout as WorkoutType } from '../types';
-import { useApp } from '../context/Store';
+import { WeeklyWorkoutPlan, WorkoutPreferences } from '../types';
 import { toast } from 'sonner';
 import { generateWorkoutPlan } from '../lib/gemini';
+import WeeklyWorkoutSheet from '../components/WeeklyWorkoutSheet';
+import WeeklyAgenda from '../components/WeeklyAgenda';
 
 const Workout = () => {
-  const { workouts, addWorkout, deleteWorkout } = useApp();
+  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [step, setStep] = useState<'config' | 'result'>('config');
   const [loading, setLoading] = useState(false);
   
-  const [preferences, setPreferences] = useState({
+  const [preferences, setPreferences] = useState<WorkoutPreferences>({
     goal: 'Hipertrofia',
-    level: 'Iniciante',
-    equipment: 'Academia Completa'
+    level: 'Intermediário',
+    equipment: 'Academia Completa',
+    frequency: '5',
+    focus: 'Corpo Todo (Full Body)',
+    duration: '60',
+    modalities: ['Musculação']
   });
 
-  const [generatedPreview, setGeneratedPreview] = useState<WorkoutType[]>([]);
+  const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<WeeklyWorkoutPlan | null>(null);
+
+  const MODALITIES = ['Musculação', 'Cardio', 'CrossFit', 'Funcional', 'Calistenia', 'Lutas', 'Yoga/Pilates'];
+  const DURATIONS = ['30', '45', '60', '90'];
+
+  const toggleModality = (mod: string) => {
+    setPreferences(prev => {
+        const current = prev.modalities;
+        if (current.includes(mod)) return { ...prev, modalities: current.filter(m => m !== mod) };
+        else return { ...prev, modalities: [...current, mod] };
+    });
+  };
 
   const handleGenerateWorkout = async () => {
+    if (preferences.modalities.length === 0) {
+        toast.error("Selecione pelo menos uma modalidade.");
+        return;
+    }
+
     setLoading(true);
     try {
-      const aiWorkouts = await generateWorkoutPlan(preferences);
-      const newWorkouts: WorkoutType[] = aiWorkouts.map((w: any) => ({
-        ...w,
-        id: generateId()
-      }));
-      setGeneratedPreview(newWorkouts);
-      for (const w of newWorkouts) {
-        await addWorkout(w);
+      // Chama a IA (que agora retorna array de dias enriquecidos)
+      const aiDays = await generateWorkoutPlan(preferences);
+      
+      if (!aiDays || aiDays.length === 0) {
+        throw new Error("Nenhum treino gerado pela IA.");
       }
-      toast.success("Treino criado pela IA com sucesso!");
+
+      // Mapeia para a estrutura WeeklyWorkoutPlan
+      const weeklyPlan: WeeklyWorkoutPlan = {
+        level: preferences.level,
+        goal: preferences.goal,
+        days: aiDays.map((day: any) => ({
+            id: day.id || generateId(),
+            dayName: day.dayName,
+            muscleGroup: day.muscleGroup,
+            duration: `${preferences.duration} min`,
+            exercises: day.exercises
+        }))
+      };
+      
+      setGeneratedWeeklyPlan(weeklyPlan);
+      toast.success("Ficha semanal criada com sucesso!");
       setStep('result');
+
     } catch (error) {
       console.error(error);
-      toast.error("Erro ao gerar treino.");
+      toast.error("Erro ao gerar treino. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-8">
-      {step === 'config' ? (
+    <div className="space-y-6 pb-24 animate-fade-in">
+      
+      {/* MODO SWITCHER */}
+      <div className="bg-gray-100 dark:bg-zinc-900 p-1 rounded-xl flex mb-6">
+        <button
+          onClick={() => setMode('ai')}
+          className={`flex-1 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            mode === 'ai' 
+              ? 'bg-white dark:bg-black text-primary shadow-sm' 
+              : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300'
+          }`}
+        >
+          <Sparkles size={16} />
+          Smart Planner (IA)
+        </button>
+        <button
+          onClick={() => setMode('manual')}
+          className={`flex-1 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            mode === 'manual' 
+              ? 'bg-white dark:bg-black text-primary shadow-sm' 
+              : 'text-gray-500 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300'
+          }`}
+        >
+          <Calendar size={16} />
+          Agenda Manual
+        </button>
+      </div>
+
+      {mode === 'manual' ? (
+        <WeeklyAgenda />
+      ) : (
         <>
-          {/* Header Section */}
-          <div className="flex items-center justify-between px-1">
-             <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Gerador IA</h2>
-                <p className="text-sm text-gray-500 dark:text-zinc-500">Crie treinos personalizados</p>
-             </div>
-             <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <Sparkles size={20} />
-             </div>
-          </div>
-
-          {/* Configuration Card */}
-          <div className="card p-6 space-y-6">
-            <OptionGroup label="Qual seu objetivo?">
-              {['Hipertrofia', 'Força', 'Resistência'].map(opt => (
-                <SelectPill 
-                  key={opt} 
-                  active={preferences.goal === opt} 
-                  onClick={() => setPreferences({...preferences, goal: opt})}
-                  label={opt}
-                />
-              ))}
-            </OptionGroup>
-
-            <OptionGroup label="Nível de experiência">
-              {['Iniciante', 'Intermediário', 'Avançado'].map(opt => (
-                <SelectPill 
-                  key={opt} 
-                  active={preferences.level === opt} 
-                  onClick={() => setPreferences({...preferences, level: opt})}
-                  label={opt}
-                />
-              ))}
-            </OptionGroup>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3 ml-1">Equipamentos</label>
-              <div className="relative">
-                <select 
-                  className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white text-sm font-bold border border-transparent focus:border-indigo-500/50 outline-none appearance-none transition-all"
-                  value={preferences.equipment}
-                  onChange={(e) => setPreferences({...preferences, equipment: e.target.value})}
-                >
-                  <option value="Academia Completa">Academia Completa</option>
-                  <option value="Pesos Livres (Halteres)">Pesos Livres</option>
-                  <option value="Peso do Corpo (Calistenia)">Peso do Corpo</option>
-                  <option value="Elásticos">Elásticos</option>
-                </select>
-                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={16} />
+          {step === 'config' ? (
+            <>
+              <div className="flex items-center justify-between px-1">
+                 <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Smart Planner</h2>
+                    <p className="text-sm text-gray-500 dark:text-zinc-500">IA de Treinamento Avançada</p>
+                 </div>
               </div>
-            </div>
 
-            <button 
-                onClick={handleGenerateWorkout}
-                disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-full font-bold shadow-lg shadow-indigo-500/25 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 mt-2"
-            >
-                {loading ? (
-                <>
-                    <LoaderIcon />
-                    <span>Criando...</span>
-                </>
-                ) : (
-                <>
-                    Gerar Treino
-                    <Sparkles size={18} className="text-indigo-200" />
-                </>
-                )}
-            </button>
-          </div>
+              <div className="card p-6 space-y-8 animate-slide-up">
+                
+                <div className="space-y-6">
+                    <OptionGroup label="Qual seu objetivo principal?">
+                    {['Hipertrofia', 'Emagrecimento', 'Força Pura', 'Resistência', 'Saúde Geral'].map(opt => (
+                        <SelectPill 
+                        key={opt} 
+                        active={preferences.goal === opt} 
+                        onClick={() => setPreferences({...preferences, goal: opt})}
+                        label={opt}
+                        />
+                    ))}
+                    </OptionGroup>
 
-          {/* History Section */}
-          {workouts.length > 0 && (
-            <div className="space-y-4 pt-4">
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg px-1">Seus Treinos</h3>
-              <div className="grid gap-4">
-                {workouts.map(w => (
-                  <div key={w.id} className="card p-5 relative group hover:border-indigo-500/30 transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight">{w.name}</h3>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md mt-2 inline-block">
-                          {w.muscleGroup}
-                        </span>
-                      </div>
-                      <button 
-                        onClick={() => deleteWorkout(w.id)}
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 transition-all"
+                    <OptionGroup label="Nível de experiência">
+                    {['Iniciante', 'Intermediário', 'Avançado', 'Atleta'].map(opt => (
+                        <SelectPill 
+                        key={opt} 
+                        active={preferences.level === opt} 
+                        onClick={() => setPreferences({...preferences, level: opt})}
+                        label={opt}
+                        />
+                    ))}
+                    </OptionGroup>
+                </div>
+
+                <div className="h-px bg-gray-100 dark:bg-zinc-800" />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3 ml-1">Dias / Semana</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white text-sm font-bold border border-transparent focus:border-primary/50 outline-none appearance-none transition-all"
+                        value={preferences.frequency}
+                        onChange={(e) => setPreferences({...preferences, frequency: e.target.value})}
                       >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="flex gap-4 text-sm">
-                        <div className="flex items-center gap-1.5 text-gray-500 dark:text-zinc-400">
-                            <Dumbbell size={14} />
-                            <span className="font-medium">{(w.exercises || []).length} exercícios</span>
-                        </div>
+                        {[2,3,4,5,6,7].map(num => (
+                          <option key={num} value={num}>{num} dias</option>
+                        ))}
+                      </select>
+                      <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={16} />
                     </div>
                   </div>
-                ))}
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3 ml-1">Duração (min)</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white text-sm font-bold border border-transparent focus:border-primary/50 outline-none appearance-none transition-all"
+                        value={preferences.duration}
+                        onChange={(e) => setPreferences({...preferences, duration: e.target.value})}
+                      >
+                        {DURATIONS.map(d => (
+                          <option key={d} value={d}>{d} min</option>
+                        ))}
+                      </select>
+                      <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px bg-gray-100 dark:bg-zinc-800" />
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3 ml-1">Modalidades</label>
+                    <div className="flex flex-wrap gap-2">
+                        {MODALITIES.map(mod => {
+                            const isActive = preferences.modalities.includes(mod);
+                            return (
+                                <button
+                                    key={mod}
+                                    onClick={() => toggleModality(mod)}
+                                    className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center gap-2 ${
+                                    isActive 
+                                        ? 'bg-primary/10 text-primary border-primary' 
+                                        : 'bg-transparent text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-800 hover:border-primary/50'
+                                    }`}
+                                >
+                                    {isActive && <Check size={14} />}
+                                    {mod}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-3 ml-1">Divisão de Treino</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white text-sm font-bold border border-transparent focus:border-primary/50 outline-none appearance-none transition-all"
+                        value={preferences.focus}
+                        onChange={(e) => setPreferences({...preferences, focus: e.target.value})}
+                      >
+                        <option value="Corpo Todo (Full Body)">Full Body (Corpo Todo)</option>
+                        <option value="Superior/Inferior (Upper/Lower)">Upper / Lower (Sup/Inf)</option>
+                        <option value="Push/Pull/Legs (ABC)">Push / Pull / Legs (ABC)</option>
+                        <option value="Body Part Split (Bro Split)">Grupos Isolados (Bro Split)</option>
+                        <option value="Híbrido (Musculação + Cardio)">Híbrido (Força + Cardio)</option>
+                      </select>
+                      <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={16} />
+                    </div>
+                </div>
+
+                <button 
+                    onClick={handleGenerateWorkout}
+                    disabled={loading}
+                    className="w-full bg-primary hover:bg-orange-600 text-white py-5 rounded-full font-bold shadow-lg shadow-primary/25 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 mt-4"
+                >
+                    {loading ? (
+                    <>
+                        <Loader2 className="animate-spin" size={24} />
+                        <span className="text-lg">Criando Ficha...</span>
+                    </>
+                    ) : (
+                    <>
+                        <span className="text-lg">Gerar Planejamento</span>
+                        <Sparkles size={20} className="text-orange-200" />
+                    </>
+                    )}
+                </button>
               </div>
+            </>
+          ) : (
+            <div className="animate-slide-up">
+              <div className="mb-4 flex justify-between items-center px-2">
+                 <button onClick={() => setStep('config')} className="text-sm text-gray-500 dark:text-zinc-500 font-bold hover:text-primary transition-colors flex items-center gap-1">
+                    ← Ajustar Preferências
+                 </button>
+                 <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+                    {preferences.goal}
+                 </span>
+              </div>
+
+              {generatedWeeklyPlan && (
+                 <WeeklyWorkoutSheet plan={generatedWeeklyPlan} />
+              )}
             </div>
           )}
         </>
-      ) : (
-        <div className="space-y-6 animate-slide-up">
-          <div className="flex justify-between items-center px-2">
-            <h2 className="font-bold text-gray-900 dark:text-white text-2xl">Resultado</h2>
-            <button onClick={() => setStep('config')} className="text-sm text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Voltar</button>
-          </div>
-
-          {generatedPreview.map((workout, idx) => (
-            <div key={idx} className="card overflow-hidden border-indigo-100 dark:border-indigo-900/30">
-              <div className="bg-indigo-600 p-6 text-white relative overflow-hidden">
-                <div className="relative z-10">
-                    <h3 className="font-bold text-2xl mb-2">{workout.name}</h3>
-                    <span className="text-xs font-bold bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-white">
-                    {workout.muscleGroup}
-                    </span>
-                </div>
-                <Dumbbell className="absolute -right-4 -bottom-4 text-white/10 w-32 h-32 rotate-12" />
-              </div>
-              <div className="p-6 space-y-4">
-                {(workout.exercises || []).map((ex, i) => (
-                  <div key={i} className="flex justify-between items-center text-sm pb-4 border-b border-gray-50 dark:border-zinc-800 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-indigo-50 dark:bg-indigo-900/20 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
-                        {i + 1}
-                      </div>
-                      <span className="text-gray-900 dark:text-gray-200 font-bold text-base">{ex.name}</span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="block text-indigo-900 dark:text-indigo-200 font-bold bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full text-xs">{ex.sets} x {ex.reps}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          
-          <div className="bg-emerald-500 text-white p-4 rounded-full text-sm font-bold text-center shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-            <Check size={18} />
-            Salvo no histórico automaticamente!
-          </div>
-        </div>
       )}
     </div>
   );
@@ -209,19 +277,12 @@ const SelectPill = ({ active, onClick, label }: { active: boolean, onClick: () =
     onClick={onClick}
     className={`px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-200 border ${
       active 
-        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20' 
-        : 'bg-transparent text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-800 hover:border-indigo-500/50 hover:text-indigo-500'
+        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20' 
+        : 'bg-transparent text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-800 hover:border-primary/50 hover:text-primary'
     }`}
   >
     {label}
   </button>
-);
-
-const LoaderIcon = () => (
-  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
 );
 
 export default Workout;

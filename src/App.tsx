@@ -7,6 +7,7 @@ import Calculator from './pages/Calculator';
 import Hydration from './pages/Hydration';
 import Workout from './pages/Workout';
 import Chat from './pages/Chat';
+import Specialist from './pages/Specialist'; // Importado
 import Auth from './pages/Auth';
 import Paywall from './components/Paywall';
 import { Loader2 } from 'lucide-react';
@@ -26,12 +27,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Force profile creation if logged in but no profile data (except on profile page)
   if (!user && window.location.pathname !== '/profile') {
     return <Navigate to="/profile" replace />;
   }
 
-  // PAYWALL CHECK
   if (trialStatus.isExpired) {
     return <Paywall />;
   }
@@ -54,6 +53,7 @@ function App() {
                   <Route path="/hydration" element={<Hydration />} />
                   <Route path="/workout" element={<Workout />} />
                   <Route path="/chat" element={<Chat />} />
+                  <Route path="/specialist" element={<Specialist />} /> {/* Nova Rota */}
                 </Routes>
               </Layout>
             </ProtectedRoute>
